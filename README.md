@@ -1,0 +1,1 @@
+# simplex-metod-lab-1
