@@ -1,234 +1,266 @@
-import re
-import sys
 import numpy as np
+import sys
 
-EPS = 1e-9
+if sys.platform == "win32":
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
 
-def povorot(tab, bazis, stroka, stolb):
-    elem = tab[stroka, stolb]
-    tab[stroka] /= elem
-    for i in range(tab.shape[0]):
-        if i != stroka:
-            tab[i] -= tab[i, stolb] * tab[stroka]
-    bazis[stroka] = stolb
 
-def vibor_stroki(kol, svobod):
-    indeksy = [i for i in range(len(kol)) if kol[i] > EPS]
-    if not indeksy:
-        return None
-    otn = svobod[indeksy] / kol[indeksy]
-    minv = otn.min()
-    for i in indeksy:
-        if abs(svobod[i] / kol[i] - minv) < 1e-12:
-            return i
-    return None
+class SimplexTwoPhase:
+    def __init__(self):
+        self.c_vec = None
+        self.A = None
+        self.b = None
+        self.signs = None
+        self.opt_type = None
+        self.total_vars = 0
+        self.free_vars = []
+        self.var_map = []
 
-def simplex_metod(lp):
-    A, b, c = lp.A, lp.b, lp.c
-    m, n = A.shape
-    bazis = lp.bazis.copy()
+    def read_input(self, path: str):
+        with open(path, "r", encoding="utf-8") as f:
+            lines = [ln.strip() for ln in f if ln.strip()]
 
-    T = np.zeros((m + 1, n + 1))
-    T[:m, :n] = A
-    T[:m, -1] = b
-    T[-1, :n] = [-1 if t == 'isk' else 0 for t in lp.tip]
+        self.opt_type = lines[0].lower()
+        self.c_vec = np.array(list(map(float, lines[1].split())))
+        self.total_vars = len(self.c_vec)
 
-    for i, j in enumerate(bazis):
-        if lp.tip[j] == 'isk':
-            T[-1] += T[i]
+        free_line = lines[2].lower()
+        if free_line.startswith("free"):
+            items = free_line.split()[1:]
+            if items:
+                self.free_vars = [int(i) - 1 for i in items]
+            start = 3
+        else:
+            self.free_vars = []
+            start = 2
 
-    while True:
-        r = T[-1, :-1]
-        vozm = np.where(r > EPS)[0]
-        if vozm.size == 0:
-            break
-        stolb = vozm[0]
-        stroka = vibor_stroki(T[:m, stolb], T[:m, -1])
-        if stroka is None:
-            return "bezgranichno", None, None
-        povorot(T, bazis, stroka, stolb)
+        signs, matrix, rhs = [], [], []
+        for ln in lines[start:]:
+            parts = ln.split()
+            signs.append(parts[0])
+            matrix.append(list(map(float, parts[1:-1])))
+            rhs.append(float(parts[-1]))
 
-    if abs(T[-1, -1]) > 1e-7:
-        return "net_resheniya", None, None
+        self.signs = signs
+        self.A = np.array(matrix)
+        self.b = np.array(rhs)
 
-    ostavit = [j for j, t in enumerate(lp.tip) if t != 'isk']
-    A2, b2, c2 = T[:m, ostavit], T[:m, -1], lp.c[ostavit]
-    n2 = len(ostavit)
+        if self.free_vars:
+            self.expand_free_vars()
 
-    T2 = np.zeros((m + 1, n2 + 1))
-    T2[:m, :n2] = A2
-    T2[:m, -1] = b2
-    T2[-1, :n2] = c2
+    def expand_free_vars(self):
+        print("Обнаружены свободные переменные:", [i + 1 for i in self.free_vars])
+        self.var_map = list(range(self.total_vars))
+        new_c, new_cols = [], []
 
-    bazis2 = [ostavit.index(j) for j in bazis if j in ostavit]
-    for i, j in enumerate(bazis2):
-        T2[-1] -= T2[-1, j] * T2[i]
-
-    while True:
-        r = T2[-1, :-1]
-        vozm = np.where(r > EPS)[0]
-        if vozm.size == 0:
-            break
-        stolb = vozm[0]
-        stroka = vibor_stroki(T2[:m, stolb], T2[:m, -1])
-        if stroka is None:
-            return "bezgranichno", None, None
-        povorot(T2, bazis2, stroka, stolb)
-
-    x = np.zeros(n2)
-    for i, j in enumerate(bazis2):
-        x[j] = T2[i, -1]
-
-    f = -T2[-1, -1]
-    if lp.minim:
-        f = -f
-
-    return "optimum_nayden", f, x[:lp.tip.count('osn')]
-
-class lineal_prog:
-    def __init__(self, c, A, b, bazis, tip, minim):
-        self.c = c
-        self.A = A
-        self.b = b
-        self.bazis = bazis
-        self.tip = tip
-        self.minim = minim
-
-def kanonic(sense, c, A, b, rels):
-    m, n = A.shape
-    minim = sense == 'MIN'
-    if minim:
-        c = -c
-
-    tip = ['osn'] * n
-    dop = []
-    bazis = [-1] * m
-    k = n
-
-    # обработка свободных переменных (могут быть отрицательными)
-
-    free_vars = [] 
-    if hasattr(kanonic, "free_vars"):
-        free_vars = kanonic.free_vars
-
-    if free_vars:
-        print(f"Обнаружены свободные переменные: {[i+1 for i in free_vars]}")
-        new_cols = []
-        new_c = []
-        for j in range(n):
-            if j in free_vars:
-                new_c += [c[j], -c[j]]
-                new_cols += [A[:, j], -A[:, j]]
-                tip += ['osn', 'osn']
+        for j in range(self.total_vars):
+            if j in self.free_vars:
+                new_c.extend([self.c_vec[j], -self.c_vec[j]])
+                new_cols.extend([self.A[:, j], -self.A[:, j]])
+                pos, neg = len(new_c) - 2, len(new_c) - 1
+                self.var_map[j] = (pos, neg)
             else:
-                new_c.append(c[j])
-                new_cols.append(A[:, j])
-        A = np.column_stack(new_cols)
-        c = np.array(new_c)
-        n = len(c)
+                new_c.append(self.c_vec[j])
+                new_cols.append(self.A[:, j])
 
-    for i in range(m):
-        if b[i] < -EPS:
-            A[i] *= -1
-            b[i] *= -1
-            rels[i] = {'<=':'>=','>=':'<=','=':'='}[rels[i]]
+        self.c_vec = np.array(new_c)
+        self.A = np.column_stack(new_cols)
+        self.total_vars = len(new_c)
 
-    for i, znak in enumerate(rels):
-        if znak == '<=':
-            s = np.zeros(m); s[i] = 1
-            dop.append(s)
-            tip.append('dop')
-            bazis[i] = k
-            k += 1
-        elif znak == '>=':
-            s = np.zeros(m); s[i] = -1
-            a = np.zeros(m); a[i] = 1
-            dop += [s, a]
-            tip += ['dop', 'isk']
-            bazis[i] = k + 1
-            k += 2
-        else:
-            a = np.zeros(m); a[i] = 1
-            dop.append(a)
-            tip.append('isk')
-            bazis[i] = k
-            k += 1
+    def to_standard_form(self):
+        m = len(self.b)
+        ext = self.A.copy()
+        base_vars = []
+        artificial = []
+        count_slack = count_surplus = count_art = 0
+        idx = self.total_vars
 
-    if dop:
-        A = np.hstack([A] + [x.reshape(-1, 1) for x in dop])
-        c = np.concatenate([c, np.zeros(A.shape[1] - len(c))])
+        for i, s in enumerate(self.signs):
+            col = np.zeros(m)
+            if s == "<=":
+                col[i] = 1
+                ext = np.column_stack([ext, col])
+                base_vars.append(idx)
+                idx += 1
+                count_slack += 1
+            elif s == ">=":
+                col[i] = -1
+                ext = np.column_stack([ext, col])
+                idx += 1
+                count_surplus += 1
+                col = np.zeros(m)
+                col[i] = 1
+                ext = np.column_stack([ext, col])
+                artificial.append(idx)
+                base_vars.append(idx)
+                idx += 1
+                count_art += 1
+            elif s == "=":
+                col[i] = 1
+                ext = np.column_stack([ext, col])
+                artificial.append(idx)
+                base_vars.append(idx)
+                idx += 1
+                count_art += 1
 
-    return lineal_prog(c, A, b, bazis, tip, minim)
+        self.A_ext = ext
+        self.artificial = artificial
+        self.basis = base_vars
+        self.num_slack = count_slack
+        self.num_surplus = count_surplus
+        self.num_art = count_art
 
-def read_file(path):
-    reg = re.compile(r'([+\-]?\s*\d*(?:\.\d*)?)\s*x(\d+)')
+        print(f"Форма: slack={count_slack}, surplus={count_surplus}, art={count_art}")
 
-    def razobrat(expr):
-        coeffs = {}
-        for m in reg.finditer(expr):
-            num, idx = m.groups()
-            num = num.replace(' ', '')
-            val = 1.0 if num in ('', '+') else -1.0 if num == '-' else float(num)
-            coeffs[int(idx) - 1] = coeffs.get(int(idx) - 1, 0.0) + val
-        return coeffs
+    def phase_one(self):
+        m, n = self.A_ext.shape
+        if self.num_art == 0:
+            print("Фаза I не требуется — допустимое решение найдено.")
+            self.table1 = np.zeros((m + 1, n + 1))
+            self.table1[:m, :n] = self.A_ext
+            self.table1[:m, n] = self.b
+            return
 
-    lines = [l.strip() for l in open(path, encoding='utf-8').read().splitlines() if l.strip()]
-    sense = lines[0].split()[0].upper()
-    obj = razobrat(lines[0].split(None, 1)[1])
+        table = np.zeros((m + 1, n + 1))
+        table[:m, :n] = self.A_ext
+        table[:m, n] = self.b
 
-    constr = []
-    free_vars = []
-    for ln in lines[1:]:
-        if ln.lower().startswith('free'):
-            free_vars = [int(i) - 1 for i in ln.split()[1:]]
-            continue
-        znak = re.search(r'(<=|>=|=)', ln).group(1)
-        left, right = ln.split(znak)
-        coeffs = razobrat(left)
-        rhs = float(right.strip())
-        constr.append((coeffs, znak, rhs))
+        for i in self.artificial:
+            table[m, i] = 1
 
-    n = max(max(d) for d, _, _ in constr + [(obj, '', 0)]) + 1
-    m = len(constr)
-    c = np.zeros(n)
-    for j, v in obj.items():
-        c[j] = v
-    A = np.zeros((m, n))
-    b = np.zeros(m)
-    rels = []
-    for i, (d, znak, rhs) in enumerate(constr):
-        for j, v in d.items():
-            A[i, j] = v
-        b[i] = rhs
-        rels.append(znak)
+        for i in range(m):
+            if self.basis[i] in self.artificial:
+                table[m, :] -= table[i, :]
 
-    kanonic.free_vars = free_vars
+        print("\n Фаза 1:")
+        step = 0
+        while True:
+            step += 1
+            col = -1
+            min_val = -1e-9
+            for j in range(n):
+                if table[m, j] < min_val:
+                    min_val = table[m, j]
+                    col = j
+            if col == -1:
+                break
 
-    return sense, c, A, b, rels
+            row = -1
+            ratio_min = float("inf")
+            for i in range(m):
+                if table[i, col] > 1e-9:
+                    ratio = table[i, n] / table[i, col]
+                    if ratio < ratio_min:
+                        ratio_min = ratio
+                        row = i
+            if row == -1:
+                raise ValueError("Фаза 1: неограничено")
 
+            pivot = table[row, col]
+            table[row, :] /= pivot
+            for i in range(m + 1):
+                if i != row:
+                    table[i, :] -= table[i, col] * table[row, :]
 
-def main(argv):
-    if len(argv) != 2:
-        print("Чтобы запустить код введите: python simplex_main.py <problem.txt>")
-        return
+            self.basis[row] = col
+            print(f"  Итерация {step}: x{col + 1} вошла, W = {-table[m, n]:.4f}")
 
-    try:
-        sense, c, A, b, rels = read_file(argv[1])
-        lp = kanonic(sense, c, A, b, rels)
-        status, f, x = simplex_metod(lp)
+        W = -table[m, n]
+        print(f"Фаза 1 завершена, W = {W:.6f}")
+        if abs(W) > 1e-6:
+            raise ValueError("Задача несовместна")
+        self.table1 = table
 
-        print("\nРезультат вычислений:")
-        if status == "optimum_nayden":
-            print(f"Оптимальное значение F = {f:.4f}")
-            for i, val in enumerate(x, 1):
-                print(f"  x{i} = {val:.4f}")
-        elif status == "bezgranichno":
-            print("Решение не ограничено.")
-        else:
-            print("Нет допустимых решений.")
+    def phase_two(self):
+        m, n = self.A_ext.shape
+        table = np.zeros((m + 1, n + 1))
+        table[:m, :] = self.table1[:m, :]
 
-    except Exception as e:
-        print("Ошибка выполнения:", e)
+        c_ext = np.zeros(n)
+        c_ext[:self.total_vars] = self.c_vec
+        table[m, :n] = c_ext if self.opt_type == "min" else -c_ext
+
+        for i, b in enumerate(self.basis):
+            if b < n and table[m, b] != 0:
+                table[m, :] -= table[m, b] * table[i, :]
+
+        print("\n Фаза 2:")
+        step = 0
+        while step < 1000:
+            step += 1
+            col = -1
+            min_val = -1e-9
+            for j in range(n):
+                if j in self.artificial:
+                    continue
+                if table[m, j] < min_val:
+                    min_val = table[m, j]
+                    col = j
+            if col == -1:
+                print(f"Оптимум найден (итерация {step})")
+                break
+
+            row = -1
+            min_ratio = float("inf")
+            for i in range(m):
+                if table[i, col] > 1e-9:
+                    val = table[i, n] / table[i, col]
+                    if val < min_ratio:
+                        min_ratio = val
+                        row = i
+            if row == -1:
+                raise ValueError("Фаза 2: неограничено")
+
+            pivot = table[row, col]
+            table[row, :] /= pivot
+            for i in range(m + 1):
+                if i != row:
+                    table[i, :] -= table[i, col] * table[row, :]
+
+            old = self.basis[row]
+            self.basis[row] = col
+            z_val = -table[m, n] if self.opt_type == "min" else table[m, n]
+            print(f"  Шаг {step}: x{col + 1} вошла, x{old + 1} вышла, Z = {z_val:.4f}")
+
+        sol = np.zeros(self.total_vars)
+        for i, b in enumerate(self.basis):
+            if b < self.total_vars:
+                sol[b] = table[i, n]
+
+        z_val = -table[m, n] if self.opt_type == "min" else table[m, n]
+        return sol, z_val
+
+    def restore_vars(self, sol):
+        if not self.free_vars:
+            return sol
+        restored = np.zeros(len(self.var_map))
+        for j, mapping in enumerate(self.var_map):
+            if isinstance(mapping, tuple):
+                pos, neg = mapping
+                restored[j] = sol[pos] - sol[neg]
+            else:
+                restored[j] = sol[mapping]
+        return restored
+
+    def solve(self):
+        self.to_standard_form()
+        self.phase_one()
+        sol, z = self.phase_two()
+        return sol, z
+
 
 if __name__ == "__main__":
-    main(sys.argv)
+    filename = sys.argv[1] if len(sys.argv) > 1 else "problem.txt"
+    model = SimplexTwoPhase()
+    model.read_input(filename)
+    solution, z_value = model.solve()
+
+    print("\nРезультат вычислений:")
+    if solution is None:
+        print("Нет допустимого решения.")
+    else:
+        result = model.restore_vars(solution)
+        for i, val in enumerate(result, start=1):
+            print(f"x{i} = {val:.4f}")
+        print(f"Оптимальное значение Z = {z_value:.4f}")
