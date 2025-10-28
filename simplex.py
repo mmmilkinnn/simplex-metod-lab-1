@@ -126,7 +126,6 @@ def kanonic(sense, c, A, b, rels):
         A = np.column_stack(new_cols)
         c = np.array(new_c)
         n = len(c)
-    # 🔹 конец добавления
 
     for i in range(m):
         if b[i] < -EPS:
