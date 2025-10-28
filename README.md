@@ -80,12 +80,17 @@ min 4 x1 + 1 x2 + 1 x3 + 2 x4
 <img src="https://github.com/user-attachments/assets/f523de11-8cfd-4f3f-ab28-aa11a8a41224" width="300"/> 
 <br>
 Пример запуска и выполнения программы для моего варианта.
+
 <img width="400" height="200" alt="image" src="https://github.com/user-attachments/assets/c2a666ff-604b-40bd-9186-21d5f64c26e0" />
 
 
 Для проверки сравню вывод моей программы с расчетом [онлайн-калькулятора](https://programforyou.ru/calculators/simplex-method).
 
 <img src="https://github.com/user-attachments/assets/eb1aaf9f-af1e-43d4-b156-cbb358a45646" width="300"/>
+
+Также сравню с эксель расчетом
+
+<img width="1308" height="423" alt="image" src="https://github.com/user-attachments/assets/fba6a68a-ad71-46d8-88c4-b663338cd42b" />
 
 **Итог: решения совпадают.**
 
