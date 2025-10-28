@@ -105,6 +105,29 @@ def kanonic(sense, c, A, b, rels):
     bazis = [-1] * m
     k = n
 
+    # обработка свободных переменных (могут быть отрицательными)
+
+    free_vars = [] 
+    if hasattr(kanonic, "free_vars"):
+        free_vars = kanonic.free_vars
+
+    if free_vars:
+        print(f"Обнаружены свободные переменные: {[i+1 for i in free_vars]}")
+        new_cols = []
+        new_c = []
+        for j in range(n):
+            if j in free_vars:
+                new_c += [c[j], -c[j]]
+                new_cols += [A[:, j], -A[:, j]]
+                tip += ['osn', 'osn']
+            else:
+                new_c.append(c[j])
+                new_cols.append(A[:, j])
+        A = np.column_stack(new_cols)
+        c = np.array(new_c)
+        n = len(c)
+    # 🔹 конец добавления
+
     for i in range(m):
         if b[i] < -EPS:
             A[i] *= -1
@@ -155,7 +178,11 @@ def read_file(path):
     obj = razobrat(lines[0].split(None, 1)[1])
 
     constr = []
+    free_vars = []
     for ln in lines[1:]:
+        if ln.lower().startswith('free'):
+            free_vars = [int(i) - 1 for i in ln.split()[1:]]
+            continue
         znak = re.search(r'(<=|>=|=)', ln).group(1)
         left, right = ln.split(znak)
         coeffs = razobrat(left)
@@ -175,6 +202,9 @@ def read_file(path):
             A[i, j] = v
         b[i] = rhs
         rels.append(znak)
+
+    kanonic.free_vars = free_vars
+
     return sense, c, A, b, rels
 
 
