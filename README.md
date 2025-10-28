@@ -52,7 +52,7 @@ func симплекс_метод:
 Для запуска кода нужно в директории с файлом siplex.py и файлом problem.txt прописать в командной строке:
 
 ```
-python simplex.py problem.py
+python simplex.py problem.txt
 ```
 
 #### Входной файл problem.txt
@@ -75,13 +75,13 @@ min 4 x1 + 1 x2 + 1 x3 + 2 x4
 
 Решение задания находится в файле simplex.py. 
 
-1. **Вариант №10** - в соответсвии с номером в ИСУ.
+**Вариант №10** - в соответсвии с номером в ИСУ.
 
 <img src="https://github.com/user-attachments/assets/f523de11-8cfd-4f3f-ab28-aa11a8a41224" width="300"/> 
 <br>
 Пример запуска и выполнения программы для моего варианта.
 
-<img width="400" height="200" alt="image" src="https://github.com/user-attachments/assets/c2a666ff-604b-40bd-9186-21d5f64c26e0" />
+<img width="463" height="180" alt="image" src="https://github.com/user-attachments/assets/00bf1629-7b5c-4a4b-83c9-c4d6baaba074" />
 
 
 Для проверки сравню вывод моей программы с расчетом [онлайн-калькулятора](https://programforyou.ru/calculators/simplex-method).
@@ -94,18 +94,6 @@ min 4 x1 + 1 x2 + 1 x3 + 2 x4
 
 **Итог: решения совпадают.**
 
-2. Для дополнительной проверки запущу программу с заданием варианта №1.
-<img width="300" alt="image" src="https://github.com/user-attachments/assets/ca7a187c-0328-43e9-a42c-3745e055936e" />
-
-Расчет программы:
-
-<img width="400" height="200"  alt="image" src="https://github.com/user-attachments/assets/42415d41-42e8-428f-a56c-5cd03e1c363a" />
-
-Расчет онлайн-калькулятора:
-
-<img width="300"  height="200" alt="image" src="https://github.com/user-attachments/assets/8d86c856-0850-4f5c-ab01-2ccc8fc20b32" />
-
-**Итог: решения совпадают, и для минимазации и для максимизации.**
 
 ---
 ## Рефлективный вывод
